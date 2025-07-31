@@ -1,37 +1,65 @@
-import configparser
+import os
+import re
+from configparser import ConfigParser
+from docx import Document
 
-def read_properties(filename):
-    """Reads a .properties file into a dictionary"""
-    config = configparser.ConfigParser()
-    with open(filename, 'r', encoding='utf-8') as f:
-        # ConfigParser requires a section header, so we add a dummy one
-        file_content = f"[DEFAULT]\n{f.read()}"
-    config.read_string(file_content)
-    return dict(config['DEFAULT'])
+TEMPLATE_FILE = 'rental_template.docx'
+PROPERTIES_FILE = 'rental.properties'
+OUTPUT_FILE = 'generated_rental_contract.docx'
 
-def replace_placeholders(template, values):
-    """Replaces {{placeholder}} in the template with actual values"""
-    for key, val in values.items():
-        placeholder = f"{{{{{key}}}}}"
-        template = template.replace(placeholder, val)
-    return template
+def extract_placeholders_from_doc(doc):
+    text = ""
+    for para in doc.paragraphs:
+        text += para.text + "\n"
+    return set(re.findall(r'\{\{(\w+)\}\}', text))
+
+def read_properties(filepath):
+    parser = ConfigParser()
+    parser.optionxform = str  # Preserve case
+    if os.path.exists(filepath):
+        parser.read(filepath)
+        return parser
+    return None
+
+def write_placeholder_properties(placeholders, filepath):
+    parser = ConfigParser()
+    parser['RENTAL'] = {key: '' for key in placeholders}
+    parser['RENTAL']['generate'] = 'false'
+    with open(filepath, 'w') as configfile:
+        parser.write(configfile)
+
+def replace_placeholders_in_doc(doc, props):
+    for para in doc.paragraphs:
+        for key, val in props.items():
+            if f'{{{{{key}}}}}' in para.text:
+                para.text = para.text.replace(f'{{{{{key}}}}}', val)
+    return doc
 
 def main():
-    # Read the properties
-    props = read_properties('rental.properties')
+    if not os.path.exists(TEMPLATE_FILE):
+        print(f"Template file '{TEMPLATE_FILE}' not found.")
+        return
 
-    # Read the template
-    with open('contract_template.txt', 'r', encoding='utf-8') as f:
-        template = f.read()
+    doc = Document(TEMPLATE_FILE)
+    placeholders = extract_placeholders_from_doc(doc)
 
-    # Replace placeholders
-    filled_template = replace_placeholders(template, props)
+    config = read_properties(PROPERTIES_FILE)
 
-    # Write to output
-    with open('rental_contract_output.txt', 'w', encoding='utf-8') as f:
-        f.write(filled_template)
+    if config is None or 'RENTAL' not in config:
+        print(f"Creating placeholder '{PROPERTIES_FILE}' with keys: {placeholders}")
+        write_placeholder_properties(placeholders, PROPERTIES_FILE)
+        input(f"\nPlease fill out '{PROPERTIES_FILE}' under [RENTAL], then press Enter to continue...")
+        config = read_properties(PROPERTIES_FILE)
 
-    print("Rental contract generated successfully.")
+    if config:
+        data = dict(config['RENTAL'])
+        data.pop('generate', None)
+        doc = Document(TEMPLATE_FILE)  # Reload to avoid stale data
+        doc = replace_placeholders_in_doc(doc, data)
+        doc.save(OUTPUT_FILE)
+        print(f"Rental contract generated in '{OUTPUT_FILE}'.")
+    else:
+        print(f"Configuration not found in '{PROPERTIES_FILE}'. Exiting.")
 
 if __name__ == '__main__':
     main()
