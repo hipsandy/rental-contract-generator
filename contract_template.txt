@@ -1,0 +1,7 @@
+RENTAL CONTRACT
+
+This agreement is made between {{first_name}} {{last_name}}, holder of ID number {{id_number}}, residing at {{address}}, and the property owner.
+
+The rental period starts on {{start_date}} and ends on {{end_date}}.
+
+Signed on {{start_date}} by Mr/Mrs.{{last_name}}.
