@@ -1,5 +1,7 @@
 import os
+import platform
 import re
+import subprocess
 from configparser import ConfigParser
 from docx import Document
 
@@ -23,8 +25,8 @@ def read_properties(filepath):
 
 def write_placeholder_properties(placeholders, filepath):
     parser = ConfigParser()
+    parser.optionxform = str  # Preserve case
     parser['RENTAL'] = {key: '' for key in placeholders}
-    parser['RENTAL']['generate'] = 'false'
     with open(filepath, 'w') as configfile:
         parser.write(configfile)
 
@@ -34,6 +36,17 @@ def replace_placeholders_in_doc(doc, props):
             if f'{{{{{key}}}}}' in para.text:
                 para.text = para.text.replace(f'{{{{{key}}}}}', val)
     return doc
+
+def open_properties_file_in_default_editor():
+    platform_os = platform.system()
+    if platform_os == 'Darwin':  # macOS
+        subprocess.run(['open', PROPERTIES_FILE])
+    elif platform_os == 'Windows':
+        subprocess.run(['notepad', PROPERTIES_FILE])
+    elif platform_os == 'Linux':
+        subprocess.run(['xdg-open', PROPERTIES_FILE])
+    else:
+        print(f"Unsupported platform: {platform.system()}")
 
 def main():
     if not os.path.exists(TEMPLATE_FILE):
@@ -48,6 +61,7 @@ def main():
     if config is None or 'RENTAL' not in config:
         print(f"Creating placeholder '{PROPERTIES_FILE}' with keys: {placeholders}")
         write_placeholder_properties(placeholders, PROPERTIES_FILE)
+        open_properties_file_in_default_editor()
         input(f"\nPlease fill out '{PROPERTIES_FILE}' under [RENTAL], then press Enter to continue...")
         config = read_properties(PROPERTIES_FILE)
 
@@ -60,6 +74,17 @@ def main():
         print(f"Rental contract generated in '{OUTPUT_FILE}'.")
     else:
         print(f"Configuration not found in '{PROPERTIES_FILE}'. Exiting.")
+
+
+    platform_os = platform.system()
+    if platform_os == 'Darwin':  # macOS
+        subprocess.run(['open', PROPERTIES_FILE])
+    elif platform.system() == 'Windows':
+        subprocess.run(['notepad', PROPERTIES_FILE])
+    elif platform.system() == 'Linux':
+        subprocess.run(['xdg-open', PROPERTIES_FILE])
+    else:
+        print(f"Unsupported platform: {platform.system()}")
 
 if __name__ == '__main__':
     main()
