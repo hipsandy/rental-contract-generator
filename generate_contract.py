@@ -1,9 +1,8 @@
 import os
-import platform
 import re
-import subprocess
 from configparser import ConfigParser
 from docx import Document
+import gradio as gr
 
 TEMPLATE_FILE = 'rental_template.docx'
 PROPERTIES_FILE = 'rental.properties'
@@ -26,7 +25,7 @@ def read_properties(filepath):
 def write_placeholder_properties(placeholders, filepath):
     parser = ConfigParser()
     parser.optionxform = str  # Preserve case
-    parser['RENTAL'] = {key: '' for key in placeholders}
+    parser['PLACEHOLDERS'] = {key: '' for key in placeholders}
     with open(filepath, 'w') as configfile:
         parser.write(configfile)
 
@@ -37,16 +36,20 @@ def replace_placeholders_in_doc(doc, props):
                 para.text = para.text.replace(f'{{{{{key}}}}}', val)
     return doc
 
-def open_properties_file_in_default_editor():
-    platform_os = platform.system()
-    if platform_os == 'Darwin':  # macOS
-        subprocess.run(['open', PROPERTIES_FILE])
-    elif platform_os == 'Windows':
-        subprocess.run(['notepad', PROPERTIES_FILE])
-    elif platform_os == 'Linux':
-        subprocess.run(['xdg-open', PROPERTIES_FILE])
-    else:
-        print(f"Unsupported platform: {platform.system()}")
+
+def save_properties_and_generate_contract(values_dict):
+    config = ConfigParser()
+    config.optionxform = str  # Preserve case
+    config["PLACEHOLDERS"] = values_dict
+    with open(PROPERTIES_FILE, "w", encoding="utf-8") as f:
+        config.write(f)
+
+    doc = Document(TEMPLATE_FILE)  # Reload to avoid stale data
+    doc = replace_placeholders_in_doc(doc, values_dict)
+    doc.save(OUTPUT_FILE)
+    return f"Rental contract generated in '{OUTPUT_FILE}'."
+
+
 
 def main():
     if not os.path.exists(TEMPLATE_FILE):
@@ -56,35 +59,29 @@ def main():
     doc = Document(TEMPLATE_FILE)
     placeholders = extract_placeholders_from_doc(doc)
 
-    config = read_properties(PROPERTIES_FILE)
-
-    if config is None or 'RENTAL' not in config:
-        print(f"Creating placeholder '{PROPERTIES_FILE}' with keys: {placeholders}")
-        write_placeholder_properties(placeholders, PROPERTIES_FILE)
-        open_properties_file_in_default_editor()
-        input(f"\nPlease fill out '{PROPERTIES_FILE}' under [RENTAL], then press Enter to continue...")
-        config = read_properties(PROPERTIES_FILE)
-
-    if config:
-        data = dict(config['RENTAL'])
-        data.pop('generate', None)
-        doc = Document(TEMPLATE_FILE)  # Reload to avoid stale data
-        doc = replace_placeholders_in_doc(doc, data)
-        doc.save(OUTPUT_FILE)
-        print(f"Rental contract generated in '{OUTPUT_FILE}'.")
+    if not placeholders:
+        print(f"No placeholders found in '{TEMPLATE_FILE}'.")
+        return
     else:
-        print(f"Configuration not found in '{PROPERTIES_FILE}'. Exiting.")
+        print(f"Launching Gradio UI with placeholders found: {placeholders}")
+        
+        # Gradio UI
+        def launch_form(*input_values):
+            values_dict = dict(zip(sorted_placeholders, input_values))
+            return save_properties_and_generate_contract(values_dict)
 
+        sorted_placeholders = sorted(placeholders)  # consistent field order
+        inputs = [gr.Textbox(label=key) for key in sorted_placeholders]
 
-    platform_os = platform.system()
-    if platform_os == 'Darwin':  # macOS
-        subprocess.run(['open', PROPERTIES_FILE])
-    elif platform.system() == 'Windows':
-        subprocess.run(['notepad', PROPERTIES_FILE])
-    elif platform.system() == 'Linux':
-        subprocess.run(['xdg-open', PROPERTIES_FILE])
-    else:
-        print(f"Unsupported platform: {platform.system()}")
+        iface = gr.Interface(
+            fn=launch_form,
+            inputs=inputs,
+            outputs="text",
+            title="Fill Rental Contract Details",
+            allow_flagging="never"
+        )
+        iface.launch(share=False, inbrowser=True)
+
 
 if __name__ == '__main__':
     main()
