@@ -20,7 +20,7 @@ def fill_template(docx_file, values):
 
 st.title("Contract Generator")
 
-uploaded_file = st.file_uploader("Upload Template (.docx)", type="docx")
+uploaded_file = st.file_uploader("Upload Template with placeholders (.docx)", type="docx")
 if uploaded_file:
     placeholders = {s for s in extract_placeholders(uploaded_file)}
     user_values = {}
