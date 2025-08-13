@@ -6,7 +6,7 @@ from io import BytesIO
 def extract_placeholders(docx_file):
     doc = Document(docx_file)
     text = "\n".join([p.text for p in doc.paragraphs])
-    return sorted(re.findall(r"\{\{(.*?)\}\}", text))
+    return sorted(set(re.findall(r"\{\{(.*?)\}\}", text)))
 
 def fill_template(docx_file, values):
     doc = Document(docx_file)
@@ -22,7 +22,7 @@ st.title("Contract Generator")
 
 uploaded_file = st.file_uploader("Upload Template with placeholders (.docx)", type="docx")
 if uploaded_file:
-    placeholders = {s for s in extract_placeholders(uploaded_file)}
+    placeholders = extract_placeholders(uploaded_file)
     user_values = {}
     for ph in placeholders:
         user_values[ph] = st.text_input(f"{ph}")
